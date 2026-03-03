@@ -26,6 +26,10 @@
 #include "cli.h"
 #include "os_key_override.h"
 
+#ifndef USER00
+#define USER00 0x7E00
+#endif
+
 const uint16_t keymaps[][MATRIX_ROWS][MATRIX_COLS] = {{
     {0xe0, 0xe1, 0xe2, 0xe3, 0xe4, 0xe5, 0xe6, 0xe7},
     {0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07},
@@ -61,9 +65,7 @@ const uint16_t keymaps[][MATRIX_ROWS][MATRIX_COLS] = {{
 }};
 
 user_config_t user_config;
-
-// 追加：スクロールフラグ
-bool is_drag_scroll = false;
+bool is_drag_scroll = false; // スクロールフラグ
 
 int8_t virtser_send_wrap(uint8_t c) {
     virtser_send(c);
@@ -82,7 +84,6 @@ static uint8_t get_gesture_threshold(void) {
 void keyboard_post_init_user(void) {
     set_mouse_gesture_threshold(get_gesture_threshold());
     os_key_override_init();
-
     user_config.raw = eeconfig_read_user();
     switch (user_config.key_os_override) {
         case KEY_OS_OVERRIDE_DISABLE:
@@ -106,3 +107,87 @@ static keyrecord_t deferred_key_record[DEFFERED_KEY_RECORD_LEN];
 
 static void push_deferred_key_record(uint16_t keycode, keyevent_t *event) {
     for (int i = 0; i < DEFFERED_KEY_RECORD_LEN; i++) {
+        if (deferred_key_record[i].keycode == KC_NO) {
+            keyrecord_t record = {.event = *event, .keycode = keycode};
+            deferred_key_record[i] = record;
+            return;
+        }
+    }
+}
+
+// キー入力時の処理
+bool process_record_user(uint16_t keycode, keyrecord_t *record) {
+    bool cont = process_record_mouse(keycode, record);
+
+    // スクロールモードの切り替えロジック
+    switch (keycode) {
+        case USER00:
+            is_drag_scroll = record->event.pressed;
+            return false;
+    }
+
+    if (keycode >= QK_MODS && keycode <= QK_MODS_MAX) {
+        if (record->event.pressed) {
+            register_mods(QK_MODS_GET_MODS(keycode));
+            uint16_t deferred_keycode = QK_MODS_GET_BASIC_KEYCODE(keycode);
+            keyevent_t deferred_key_event = (keyevent_t){.type = KEY_EVENT, .key = (keypos_t){.row = VIAL_MATRIX_MAGIC, .col = VIAL_MATRIX_MAGIC}, .pressed = 1, .time = (timer_read() | 1)};
+            push_deferred_key_record(deferred_keycode, &deferred_key_event);
+        } else {
+            uint16_t deferred_keycode = QK_MODS_GET_BASIC_KEYCODE(keycode);
+            keyevent_t deferred_key_event = ((keyevent_t){.type = KEY_EVENT, .key = (keypos_t){.row = VIAL_MATRIX_MAGIC, .col = VIAL_MATRIX_MAGIC}, .pressed = 0, .time = (timer_read() | 1)});
+            unregister_mods(QK_MODS_GET_MODS(keycode));
+            push_deferred_key_record(deferred_keycode, &deferred_key_event);
+        }
+        return false;
+    }
+
+    if (record->event.pressed) {
+        switch (keycode) {
+            case QK_KB_0:
+                remove_all_os_key_overrides();
+                user_config.key_os_override = KEY_OS_OVERRIDE_DISABLE;
+                eeconfig_update_user(user_config.raw);
+                return false;
+            case QK_KB_1:
+                register_us_key_on_jp_os_overrides();
+                user_config.key_os_override = US_KEY_JP_OS_OVERRIDE_DISABLE;
+                eeconfig_update_user(user_config.raw);
+                return false;
+            case QK_KB_2:
+                register_jp_key_on_us_os_overrides();
+                user_config.key_os_override = JP_KEY_US_OS_OVERRIDE_DISABLE;
+                eeconfig_update_user(user_config.raw);
+                return false;
+        }
+    }
+    return cont;
+}
+
+// トラックボール移動をスクロールに変換する心臓部
+report_mouse_t pointing_device_task_user(report_mouse_t mouse_report) {
+    if (is_drag_scroll) {
+        mouse_report.h = mouse_report.x;
+        mouse_report.v = -mouse_report.y; // 上下反転が必要ならマイナスを消す
+        mouse_report.x = 0;
+        mouse_report.y = 0;
+    }
+    return mouse_report;
+}
+
+void post_process_record_user(uint16_t keycode, keyrecord_t* record) {
+    post_process_record_mouse(keycode, record);
+}
+
+void housekeeping_task_user(void) {
+    for (int i = 0; i < DEFFERED_KEY_RECORD_LEN; i++) {
+        if (deferred_key_record[i].keycode != KC_NO) {
+            g_vial_magic_keycode_override = deferred_key_record[i].keycode;
+            action_exec(deferred_key_record[i].event);
+            deferred_key_record[i].keycode = KC_NO;
+        } else {
+            break;
+        }
+    }
+    cli_exec();
+}
+// 以降、DYNAMIC_KEYMAPなどのマクロ処理（変更不要のため省略可能ですが、そのまま残してOKです）
