@@ -25,16 +25,16 @@ jobs:
         persist-credentials: false
         submodules: recursive
 
-    - name: Install Python dependencies
+    - name: Fix Python Dependencies
       run: |
-        # image_7ecc27.png で出ている appdirs エラーを解消
+        # image_7ecc27.png のエラーを解消
         python3 -m pip install appdirs
 
     - name: Build Firmware
       id: build
       run: |
         git config --global --add safe.directory $(pwd)
-        # Quantizerのみをビルド
+        # ターゲットを限定してビルド
         qmk compile -kb sekigon/keyboard_quantizer/mini -km vial
 
     - name: Upload Artifact
