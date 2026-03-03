@@ -15,17 +15,17 @@
  */
 #include QMK_KEYBOARD_H
 
-#include "pointing_device.h"
+// 標準の pointing_device.h は使わない（Quantizerではエラーになるため）
 #include "virtser.h"
 #include "eeconfig.h"
 #include "vial.h"
-
 #include "keymap.h"
 #include "quantizer_mouse.h"
 #include "report_parser.h"
 #include "cli.h"
 #include "os_key_override.h"
 
+// USER00 の定義（エラー回避のためここで強制的に定義します）
 #ifndef USER00
 #define USER00 0x7E00
 #endif
@@ -119,7 +119,7 @@ static void push_deferred_key_record(uint16_t keycode, keyevent_t *event) {
 bool process_record_user(uint16_t keycode, keyrecord_t *record) {
     bool cont = process_record_mouse(keycode, record);
 
-    // スクロールモードの切り替えロジック
+    // スクロールモードの切り替え
     switch (keycode) {
         case USER00:
             is_drag_scroll = record->event.pressed;
@@ -163,15 +163,16 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
     return cont;
 }
 
-// トラックボール移動をスクロールに変換する心臓部
-report_mouse_t pointing_device_task_user(report_mouse_t mouse_report) {
+// 重要：Keyboard Quantizer専用のマウスレポート処理
+void quantizer_mouse_task_user(report_mouse_t* mouse_report) {
     if (is_drag_scroll) {
-        mouse_report.h = mouse_report.x;
-        mouse_report.v = -mouse_report.y; // 上下反転が必要ならマイナスを消す
-        mouse_report.x = 0;
-        mouse_report.y = 0;
+        // マウスのXY移動をスクロール量に変換
+        mouse_report->h = mouse_report->x;
+        mouse_report->v = -mouse_report->y; // 上下逆ならマイナスを外してください
+        // カーソル移動は止める
+        mouse_report->x = 0;
+        mouse_report->y = 0;
     }
-    return mouse_report;
 }
 
 void post_process_record_user(uint16_t keycode, keyrecord_t* record) {
@@ -190,4 +191,3 @@ void housekeeping_task_user(void) {
     }
     cli_exec();
 }
-// 以降、DYNAMIC_KEYMAPなどのマクロ処理（変更不要のため省略可能ですが、そのまま残してOKです）
