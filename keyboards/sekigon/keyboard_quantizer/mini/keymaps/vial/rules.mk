@@ -1,6 +1,8 @@
 VIA_ENABLE = yes
 VIAL_ENABLE = yes
 VIAL_INSECURE = yes
+# ↓ マウス・スクロール機能を有効化するために必須の1行です
+POINTING_DEVICE_ENABLE = yes
 
 SRC += quantizer_mouse.c raw_hid.c
 
