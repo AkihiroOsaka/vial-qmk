@@ -20,7 +20,7 @@ jobs:
     
     steps:
     - name: (actions) Checkout Vial repo
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
       with:
         persist-credentials: false
         submodules: recursive
@@ -34,7 +34,7 @@ jobs:
 
     - name: Upload Artifact
       if: success()
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: keyboard_quantizer_mini_vial
         # ビルドされた .uf2 ファイルを保存
