@@ -25,11 +25,16 @@ jobs:
         persist-credentials: false
         submodules: recursive
 
+    - name: Install Python dependencies
+      run: |
+        # image_7ecc27.png で出ている appdirs エラーを解消
+        python3 -m pip install appdirs
+
     - name: Build Firmware
       id: build
       run: |
         git config --global --add safe.directory $(pwd)
-        # Quantizerのみをビルド対象に固定
+        # Quantizerのみをビルド
         qmk compile -kb sekigon/keyboard_quantizer/mini -km vial
 
     - name: Upload Artifact
@@ -38,17 +43,3 @@ jobs:
       with:
         name: keyboard_quantizer_mini_vial
         path: ./*.uf2
-
-    - name: Dump failure logs
-      if: failure()
-      run: |
-        echo '### Failure logs' | tee -a "${GITHUB_STEP_SUMMARY}"
-        if [ -d .build ]; then
-          cd .build
-          for log in failed.log.*; do
-            pretty_logname="$(echo "${log}" | sed "s/^failed\.log\.[0-9]\+\.//")"
-            printf '\n::group::%s\n%s\n::endgroup::\n' "${pretty_logname}" "$(sed "${REGEX_MAKE_OUTPUT}" < "${log}")"
-          done
-        else
-          echo "No .build directory found."
-        fi
